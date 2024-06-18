@@ -23,6 +23,7 @@ The library code and IPython Notebooks are then installed as follows:
 ```
 git clone https://github.com/gregcaporaso/tax-credit.git
 cd tax-credit/
+conda create -n tax-credit
 pip install .
 ```
 
