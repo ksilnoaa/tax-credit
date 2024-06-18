@@ -260,7 +260,7 @@ def distance_comparison(dataframe, data_dir, test_name, samples=10000):
             {'train/train': inner, 'train/test': outer})
 
         plt.figure()  # figsize=(width, height))
-        ax = regplot('train/train', 'train/test', df, fit_reg=False)
+        ax = regplot(x='train/train', y='train/test', data=df, fit_reg=False)
         ax.set_title(index, fontsize=20)
         maxval = max((inner[-1], outer[-1]))
         plt.plot([0, maxval], [0, maxval], linewidth=2)
@@ -343,10 +343,10 @@ def generate_novel_sequence_sets(cv_dir, novel_dir,
     '''
 
     for cv_fold_dir in glob(join(cv_dir, '*')):
-        index, REF, iteration = basename(cv_fold_dir).split('-')
+        index, iteration = basename(cv_fold_dir).split('-iter')
         for level in levelrange:
             novel_fold_dir = join(
-                novel_dir, '-'.join([index, REF, 'L'+str(level), iteration]))
+                novel_dir, '-'.join([index, 'L'+str(level), 'iter'+iteration]))
             if not exists(novel_fold_dir):
                 makedirs(novel_fold_dir)
 
@@ -576,7 +576,9 @@ def evaluate_classification(obs_taxon, exp_taxon):
     '''Given an observed and actual taxonomy string corresponding to a cross-
     validated simulated community, score as match, overclassification,
     underclassification, or misclassification'''
-
+    # KS edits, strip NAs
+    obs_taxon = obs_taxon.replace(';NA', '')
+    exp_taxon = exp_taxon.replace(';NA', '')
     if obs_taxon == exp_taxon:
         return 'match'
     if exp_taxon.startswith(obs_taxon) or \
@@ -727,7 +729,7 @@ def novel_taxa_classification_evaluation(results_dirs, expected_results_dir,
 
         if test_type == 'novel-taxa':
             index = dataset_id.split('-L')[0]
-            level = int(dataset_id.split('-')[2].lstrip('L').strip())
+            level = int(dataset_id.split('-')[1].lstrip('L').strip())
             iteration = dataset_id.split('iter')[1]
         elif test_type == 'cross-validated':
             index, iteration = dataset_id.split('-iter')

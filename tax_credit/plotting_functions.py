@@ -56,7 +56,7 @@ def lmplot_from_data_frame(df, x, y, group_by=None, style_theme="whitegrid",
     lm = sns.lmplot(x, y, col=group_by, data=df, ci=None, size=5,
                     scatter_kws={"s": 50, "alpha": 1}, sharey=True, hue=hue,
                     palette=color_palette)
-    sns.plt.show()
+    plt.show()
 
     if regress is True:
         try:
@@ -89,8 +89,9 @@ def pointplot_from_data_frame(df, x_axis, y_vars, group_by, color_by,
         grid[y_var] = sns.FacetGrid(df, col=group_by, hue=color_by,
                                     palette=color_palette)
         grid[y_var] = grid[y_var].map(
-            sns.pointplot, x_axis, y_var, marker="o", ms=4)
-    sns.plt.show()
+            sns.pointplot, x_axis, y_var, markers="o")
+        grid[y_var].add_legend()
+    plt.show()
     return grid
 
 
@@ -268,8 +269,8 @@ def batch_beta_diversity(expected_results_dir, method="braycurtis",
         s, r, pc, dm = beta_diversity_pcoa(table, method=method, col=col,
                                            permutations=permutations, dim=dim,
                                            colormap=colormap)
-        sns.plt.show()
-        sns.plt.clf()
+        plt.show()
+        plt.clf()
 
 
 def make_distance_matrix(biom_fp, method="braycurtis"):
@@ -327,7 +328,7 @@ def beta_diversity_pcoa(biom_fp, method="braycurtis", permutations=99, dim=2,
 
     if dim == 2:
         # bokeh pcoa plots
-        pc123 = pc.samples.ix[:, ["PC1", "PC2", "PC3"]]
+        pc123 = pc.samples.loc[:, ["PC1", "PC2", "PC3"]]
         smd_merge = s_md.merge(pc123, left_index=True, right_index=True)
         smd_merge['Color'] = [colormap[x] for x in smd_merge['method']]
         title = smd_merge['reference'][0]
@@ -487,8 +488,8 @@ def average_distance_boxplots(expected_results_dir, group_by="method",
             box[reference] = _add_significance_to_boxplots(
                 results, method_rank, box[reference], method='method')
 
-        sns.plt.show()
-        sns.plt.clf()
+        plt.show()
+        plt.clf()
 
         display(results)
 
@@ -547,7 +548,7 @@ def _show_method_rank(best, group_by, params, metric, display_fields,
     '''
     avg_best = best.groupby([group_by, params]).mean().reset_index()
     avg_best_sorted = avg_best.sort_values(by=metric, ascending=ascending)
-    method_rank = avg_best_sorted.ix[:, display_fields]
+    method_rank = avg_best_sorted.loc[:, display_fields]
     display(method_rank)
     return method_rank
 
@@ -608,8 +609,8 @@ def per_method_boxplots(dm, sample_md, group_by="method", standard='expected',
 
         results = per_method_pairwise_tests(d, group_by=g, metric=metric)
 
-        sns.plt.show()
-        sns.plt.clf()
+        plt.show()
+        plt.clf()
         display(results)
 
     return box
@@ -834,6 +835,6 @@ def rank_optimized_method_performance_by_dataset(df,
             box[d] = _add_significance_to_boxplots(
                 results, method_rank, box[d])
 
-            sns.plt.show()
+            plt.show()
 
     return box
