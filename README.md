@@ -21,7 +21,7 @@ Setup and install
 The library code and Jupyter Notebooks are then installed as follows:
 
 ```
-git clone https://github.com/gregcaporaso/tax-credit.git
+git clone https://github.com/ksilnoaa/tax-credit.git
 cd tax-credit/
 conda create -n tax-credit pip
 pip install .
