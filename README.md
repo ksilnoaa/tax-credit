@@ -25,6 +25,9 @@ git clone https://github.com/ksilnoaa/tax-credit.git
 cd tax-credit/
 conda create -n tax-credit pip
 pip install .
+conda activate tax-credit
+conda install -c qiime2 -c conda-forge -c bioconda qiime2
+
 ```
 
 
