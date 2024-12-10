@@ -1,0 +1,17 @@
+Feature ID	Taxon	Confidence
+ASV_1	Eukaryota;Haptista;Haptophyta;Haptophyta_X;Prymnesiophyceae;Prymnesiales;Chrysochromulinaceae;Chrysochromulina;Chrysochromulina_sp.;	0.9797643564737194
+ASV_2	Eukaryota;TSAR;Alveolata;Dinoflagellata;Syndiniales;Dino-Group-II;Dino-Group-II-Clade-3;Dino-Group-II-Clade-3_X;Dino-Group-II-Clade-3_X_sp.;	0.9999780035656154
+ASV_3	Eukaryota;TSAR;Alveolata;Dinoflagellata;Syndiniales;Dino-Group-I;Dino-Group-I-Clade-5;Dino-Group-I-Clade-5_X;Dino-Group-I-Clade-5_X_sp.;	0.9999996476035501
+ASV_4	Eukaryota;TSAR;Alveolata;Dinoflagellata;Dinophyceae;Peridiniales;Heterocapsaceae	0.7018388702339072
+ASV_5	Eukaryota;TSAR;Stramenopiles;Gyrista;Coscinodiscophyceae;Rhizosoleniales;Rhizosoleniaceae;Guinardia;Guinardia_striata;	0.9991954636747523
+ASV_6	Eukaryota;TSAR;Alveolata;Dinoflagellata;Dinophyceae;Gonyaulacales;Lingulodiniaceae;Lingulodinium;Lingulodinium_polyedra;	0.9999994862058271
+ASV_7	Eukaryota;TSAR;Rhizaria;Radiolaria;RAD-B;RAD-B_X;RAD-B_X_Group-IVe;RAD-B_X_Group-IVe_X;RAD-B_X_Group-IVe_X_sp.;	0.9999986984861323
+ASV_8	Eukaryota;TSAR;Rhizaria;Cercozoa;Filosa-Thecofilosea;Cryomonadida;Cryothecomonas-lineage;Cryothecomonas-lineage_X;Cryothecomonas-lineage_X_sp.;	0.9870688317378059
+ASV_9	Eukaryota;TSAR;Alveolata;Dinoflagellata;Dinophyceae;Gymnodiniales;Gymnodiniaceae	0.7588079456961283
+ASV_10	Eukaryota;TSAR;Alveolata;Dinoflagellata;Syndiniales;Dino-Group-II;Dino-Group-II-Clade-10-and-11;Dino-Group-II-Clade-10-and-11_X;Dino-Group-II-Clade-10-and-11_X_sp.;	0.9967089061782434
+ASV_11	Eukaryota;TSAR;Alveolata;Ciliophora;Spirotrichea;Oligotrichida;Oligotrichida_X;Oligotrichida_XX;Oligotrichida_XX_sp.;	0.9100180804379767
+ASV_12	Eukaryota;TSAR;Alveolata;Dinoflagellata;Dinophyceae;Gonyaulacales;Ceratiaceae;Tripos	0.999999770539467
+ASV_13	Eukaryota;Obazoa;Opisthokonta;Metazoa;Arthropoda;Crustacea;Maxillopoda;Paracalanus	0.9801455799605824
+ASV_14	Eukaryota;TSAR;Stramenopiles;Gyrista;Mediophyceae;Chaetocerotales;Leptocylindraceae;Leptocylindrus;Leptocylindrus_convexus;	0.9992781746009457
+ASV_15	Eukaryota;TSAR;Alveolata;Ciliophora;Phyllopharyngea;Suctoria;Suctoria_X;Suctoria_XX;Suctoria_XX_sp.;	0.9999999462278325
+ASV_16	Eukaryota;TSAR;Alveolata;Dinoflagellata;Dinophyceae;Suessiales;Suessiaceae;Biecheleria;Biecheleria_cincta;	0.9102299621246198

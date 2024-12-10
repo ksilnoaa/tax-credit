@@ -1,0 +1,15 @@
+Taxon	MP_ERR3712072	MP_ERR3712077
+Eukaryota;Haptista;Haptophyta;NA;Prymnesiophyceae;Prymnesiales;NA;NA;NA	32153	73024
+Eukaryota;TSAR;Alveolata;Dinoflagellata;Syndiniales;NA;NA;NA;NA	22820	39622
+Eukaryota;TSAR;Alveolata;Dinoflagellata;Dinophyceae;NA;NA;NA;NA	6109	5246
+Eukaryota;TSAR;Stramenopiles;Gyrista;Coscinodiscophyceae;NA;NA;NA;NA	3404	7127
+Eukaryota;TSAR;Alveolata;Dinoflagellata;Dinophyceae;Gonyaulacales;Lingulodiniaceae;Lingulodinium;NA	0	8738
+Eukaryota;TSAR;Rhizaria;Radiolaria;Polycystinea;Spumellaria;Pyloniidae;Larcopyle;NA	4960	3494
+Eukaryota;TSAR;Rhizaria;Cercozoa;Filosa-Thecofilosea;Cryomonadida;NA;NA;NA	2001	2873
+Eukaryota;TSAR;Alveolata;Dinoflagellata;Dinophyceae;Gymnodiniales;Gymnodiniaceae;Gymnodinium;NA	0	4332
+Eukaryota;TSAR;Alveolata;Ciliophora;Spirotrichea;Oligotrichida;NA;NA;NA	3280	328
+Eukaryota;TSAR;Alveolata;Dinoflagellata;Dinophyceae;Gonyaulacales;Ceratiaceae;Neoceratium;NA	2590	12
+Eukaryota;Obazoa;Opisthokonta;Metazoa;Arthropoda;NA;NA;NA;NA	2393	20
+Eukaryota;TSAR;Stramenopiles;Gyrista;Coscinodiscophyceae;;NA;NA;NA	21	873
+Eukaryota;TSAR;Alveolata;Ciliophora;Phyllopharyngea;Suctoria;NA;NA;NA	0	424
+Eukaryota;TSAR;Alveolata;Dinoflagellata;Dinophyceae;Gymnodiniales;Gymnodiniaceae;Gyrodinium;NA	0	265

@@ -1,0 +1,17 @@
+Feature ID	Taxon	Consensus
+ASV_1	Eukaryota	1.0
+ASV_10	Eukaryota;Cnidaria;Anthozoa	0.8
+ASV_11	Eukaryota;Ciliophora;Spirotrichea;NA;Strombidiidae	1.0
+ASV_12	Eukaryota	1.0
+ASV_13	Eukaryota;Arthropoda;Hexanauplia;Calanoida;Paracalanidae;Paracalanus	0.9
+ASV_14	Eukaryota;Bacillariophyta	1.0
+ASV_15	Eukaryota;Ciliophora;Phyllopharyngea;Endogenida;Acinetidae	0.8
+ASV_16	Eukaryota;Cnidaria;Anthozoa	0.8
+ASV_2	Eukaryota	1.0
+ASV_3	Eukaryota	1.0
+ASV_4	Eukaryota;Cnidaria;Anthozoa	0.8
+ASV_5	Eukaryota;Bacillariophyta;Coscinodiscophyceae;Rhizosoleniales;Rhizosoleniaceae	1.0
+ASV_6	Eukaryota;Cnidaria;Anthozoa	0.8
+ASV_7	Eukaryota;Bacillariophyta	1.0
+ASV_8	Eukaryota;Cercozoa	1.0
+ASV_9	Eukaryota;Cnidaria;Anthozoa	0.8

@@ -1,0 +1,17 @@
+Feature ID	Taxon	Confidence
+ASV_1	Eukaryota	0.9999654677302571
+ASV_2	Eukaryota	0.9998772703337173
+ASV_3	Eukaryota	0.9999811873018845
+ASV_4	Eukaryota;Bacillariophyta;Bacillariophyceae;Bacillariales;Bacillariaceae;Fragilariopsis;Fragilariopsis sp.	0.9893851232607038
+ASV_5	Eukaryota;Bacillariophyta;Coscinodiscophyceae;Rhizosoleniales;Rhizosoleniaceae;Guinardia;Guinardia striata	0.9993608694851034
+ASV_6	Eukaryota;Cnidaria;Anthozoa;Scleractinia;Acroporidae;Astreopora;Astreopora sp. GA063	0.647198533464826
+ASV_7	Eukaryota;Cnidaria	0.5058985496054103
+ASV_8	Eukaryota;Cercozoa;Thecofilosea;Cryomonadida;Protaspidae;Cryothecomonas;Cryothecomonas aestivalis	0.9931299103535665
+ASV_9	Eukaryota;Bacillariophyta;Bacillariophyceae;Bacillariales;Bacillariaceae;Fragilariopsis;Fragilariopsis sp.	0.8898269822673255
+ASV_10	Eukaryota	0.9999221040253945
+ASV_11	Eukaryota;Ciliophora;Spirotrichea;NA;Strombidiidae;Strombidium;Strombidium cf. basimorphum	0.9996977859337886
+ASV_12	Eukaryota;Cnidaria;Anthozoa;Scleractinia;Acroporidae	0.5367258604735308
+ASV_13	Eukaryota;Arthropoda;Hexanauplia;Calanoida;Paracalanidae;Paracalanus;Paracalanus parvus	0.9942547901051215
+ASV_14	Eukaryota;Bacillariophyta;Coscinodiscophyceae;Leptocylindrales;Leptocylindraceae;Leptocylindrus;Leptocylindrus convexus	0.9999999943349849
+ASV_15	Eukaryota;Ciliophora;Phyllopharyngea;Endogenida;Acinetidae;Acineta;Acineta flava	0.9669913737378131
+ASV_16	Eukaryota;Cnidaria;Anthozoa;Scleractinia;Acroporidae;Acropora;Acropora millepora	0.898652007494184
