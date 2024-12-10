@@ -18,23 +18,18 @@ An example of how to load different environments to support other methods can be
 
 Setup and install
 -----------------
-The library code and IPython Notebooks are then installed as follows:
+The library code and Jupyter Notebooks are then installed as follows:
 
 ```
-git clone https://github.com/gregcaporaso/tax-credit.git
+git clone https://github.com/ksilnoaa/tax-credit.git
 cd tax-credit/
-conda create -n tax-credit
+conda create -n tax-credit pip
 pip install .
+conda activate tax-credit
+conda install -c qiime2 -c conda-forge -c bioconda qiime2
+
 ```
 
-Finally, download and unzip the reference databases:
-
-```
-wget https://unite.ut.ee/sh_files/sh_qiime_release_20.11.2016.zip
-wget ftp://greengenes.microbio.me/greengenes_release/gg_13_5/gg_13_8_otus.tar.gz
-unzip sh_qiime_release_20.11.2016.zip
-tar -xzf gg_13_8_otus.tar.gz
-```
 
 Equipment
 ------------------
@@ -53,10 +48,8 @@ To view and interact with [Jupyter Notebook](http://jupyter.org/), change into t
 
 ``jupyter notebook index.ipynb``
 
+An example notebook made by K. Silliman is called tax-credit_example.ipynb
+
 The notebooks menu should open in your browser. From the main index, you can follow the menus to browse different analyses, or use ``File --> Open`` from the notebook toolbar to access the full file tree.
 
 
-Citing
-------
-
-A publication is on its way! For now, if you use any of the data or code included in this repository, please cite https://github.com/caporaso-lab/tax-credit
