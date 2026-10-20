@@ -426,8 +426,9 @@ def generate_simulated_datasets(dataframe, data_dir, iterations,
         ``cross-validated-trad`` is in ``simulation_method``. See
         :func:`generate_cross_validated_trad_sequences`.
 
-        Changing this value does not by itself invalidate fold directories
-        that already exist on disk; pass ``force=True`` to rebuild them.
+        Fold contents are rewritten on every call, so a changed value takes
+        effect without ``force``; see
+        :func:`generate_cross_validated_trad_sequences`.
     '''
     allowed_methods = {
         'cross-validated-taxa',
@@ -1049,10 +1050,14 @@ def generate_cross_validated_trad_sequences(read_taxa, simulated_reads_fp, index
 
     Notes
     -----
-    Fold directories that already exist are rewritten in place, but nothing
-    keys off *query_size*, so changing it does not invalidate folds left over
-    from an earlier run with a different size. Pass ``force=True`` (Tourmaline:
-    ``force_regenerate: true``) when changing it.
+    Every fold's ``query.fasta`` and ``query_taxa.tsv`` are rewritten on each
+    call, so a changed *query_size* takes effect without any cache flag.
+    ``force`` here only deletes the shared ``_trad_cv_shared_ref_*.qza``
+    artifacts, which hold the full-database reference and do not depend on
+    *query_size*. (Under Tourmaline the catch is one level up: snakemake skips
+    ``tax_credit_prepare_datasets`` on a finished run, so delete
+    ``.datasets.done`` or use ``--forcerun`` to make this function run at all.
+    ``force_regenerate`` does not trigger it.)
     '''
     if iterations < 2:
         raise ValueError('Must perform two or more iterations for '

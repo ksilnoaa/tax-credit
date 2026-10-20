@@ -157,7 +157,7 @@ In every case a random pool of the requested size is drawn with a fixed seed, th
 
 `ValueError` is raised, with a message naming both the float and int readings, for: a float at or below 0 or above 1; an int below 1; a non-numeric type; and any value whose resolved pool would be smaller than `iterations` (some fold would get no sequences) — including a database with fewer sequences than `iterations`.
 
-Fold directories left over from an earlier run are not invalidated by a change to `query_size`; pass `force=True` (Tourmaline: `force_regenerate: true`) to rebuild them at the new size.
+Fold contents are rewritten on every call, so a changed `query_size` takes effect with no cache flag; `force` only rebuilds the shared full-database reference artifacts. Under Tourmaline, snakemake skips `tax_credit_prepare_datasets` on a run that already finished — delete `.datasets.done` or pass `--forcerun tax_credit_prepare_datasets`. `force_regenerate: true` does neither.
 
 ---
 
