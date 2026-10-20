@@ -44,6 +44,9 @@ TAXONOMY_TSV = "taxonomy.tsv"
 QUERY_TAX_ASSIGNMENTS_TXT = "query_tax_assignments.txt"
 QUERY_TAXA_TSV = "query_taxa.tsv"
 CLASSIFICATION_ACCURACY_LOG_TSV = "classification_accuracy_log.tsv"
+# Per-rank classification metrics for one assignment result, written
+# beside the per-read accuracy log.
+CLASSIFICATION_METRICS_TSV = "classification_metrics.tsv"
 
 # --- CV / novel fold contents (FASTA + taxonomy TSV) ------------------------
 REF_SEQS_FASTA = "ref_seqs.fasta"

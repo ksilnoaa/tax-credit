@@ -18,6 +18,7 @@ from io import StringIO
 
 from unittest import TestCase, main
 import pandas as pd
+from numpy import isnan, nan
 from tempfile import mkdtemp
 from tax_credit.framework_functions import (
     generate_novel_sequence_sets,
@@ -47,6 +48,16 @@ from tax_credit.taxa_manipulator import (import_to_list,
                                          import_taxonomy_to_dict,
                                          extract_fasta_ids,
                                          extract_taxa_names)
+
+
+def assert_level_lists_equal(observed, expected):
+    """Compare per-level metric lists, treating NaN as equal to NaN."""
+    assert len(observed) == len(expected), (observed, expected)
+    for level, (got, want) in enumerate(zip(observed, expected)):
+        if isinstance(want, float) and isnan(want):
+            assert isnan(got), f'level {level}: expected NaN, got {got}'
+        else:
+            assert got == want, f'level {level}: expected {want}, got {got}'
 
 
 class EvalFrameworkTests(TestCase):
@@ -871,9 +882,14 @@ class EvalFrameworkTests(TestCase):
             results.iloc[0]['underclassification_ratio'], 0.625)
         self.assertAlmostEqual(
             results.iloc[0]['misclassification_ratio'], 0.125)
-        self.assertEqual(results.iloc[0]['Precision'], self.exp_p)
-        self.assertEqual(results.iloc[0]['Recall'], self.exp_r)
-        self.assertEqual(results.iloc[0]['F-measure'], self.exp_f)
+        assert_level_lists_equal(
+            results.iloc[0]['Precision'], self.exp_p)
+        assert_level_lists_equal(results.iloc[0]['Recall'], self.exp_r)
+        assert_level_lists_equal(results.iloc[0]['F-measure'], self.exp_f)
+        assert_level_lists_equal(
+            results.iloc[0]['Recall_original'], self.exp_r_org)
+        assert_level_lists_equal(
+            results.iloc[0]['F-measure_original'], self.exp_f_org)
         self.assertEqual(results.iloc[0]['mismatch_level_list'], self.exp_m)
 
     def test_extract_per_level_accuracy(self):
@@ -892,7 +908,11 @@ class EvalFrameworkTests(TestCase):
             self.assertEqual(pla.iloc[i]['Precision'], self.exp_p[i + 1])
             self.assertEqual(pla.iloc[i]['Recall'], self.exp_r[i + 1])
             self.assertEqual(pla.iloc[i]['F-measure'], self.exp_f[i + 1])
-            self.assertEqual(pla.iloc[i]['match_ratio'], self.exp_r[i + 1])
+            self.assertEqual(
+                pla.iloc[i]['Recall_original'], self.exp_r_org[i + 1])
+        # match_ratio is a classification ratio, not a score: it is no longer
+        # derived here, because it no longer equals Recall
+        self.assertNotIn('match_ratio', pla.columns)
 
     @classmethod
     def setUpClass(self):
@@ -1151,11 +1171,16 @@ class EvalFrameworkTests(TestCase):
                                  "Reference id", "Fwd primer", "Rev primer",
                                  "Fwd primer id", "Rev primer id"]
 
-        self.exp_p = [0, 1.0, 1.0, 0.875, 0.8571428571428571,
+        # level 0 (kingdom) is never scored, so it is NaN rather than 0
+        self.exp_p = [nan, 1.0, 1.0, 0.875, 0.8571428571428571,
                       0.83333333333333337, 0.66666666666666663]
-        self.exp_r = [0, 1.0, 1.0, 0.875, 0.75, 0.625, 0.25]
-        self.exp_f = [0, 1.0, 1.0, 0.875, 0.79999999999999993,
+        self.exp_r = [nan, 1.0, 1.0, 0.875, 0.75, 0.625, 0.25]
+        self.exp_f = [nan, 1.0, 1.0, 0.875, 0.79999999999999993,
                       0.7142857142857143, 0.36363636363636365]
+        # no overclassification anywhere in this fixture, so the original
+        # scoring coincides with the new scoring at every level
+        self.exp_r_org = list(self.exp_r)
+        self.exp_f_org = list(self.exp_f)
         self.exp_m = [0, 0, 0, 1, 1, 1, 3, 2]
 
     @classmethod

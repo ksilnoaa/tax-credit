@@ -44,15 +44,22 @@ that rank. ``A;B;C`` is resolved at level 2 but not at level 3.
 
 Metrics (per sample, per rank)
 ------------------------------
-Taxon Accuracy Rate (TAR)
-    |observed ∩ expected| / |observed|. NaN when no taxa are observed.
-Taxon Detection Rate (TDR)
-    |observed ∩ expected| / |expected|. NaN when no taxa are expected.
+Taxon Accuracy Rate (TAR, also reported as ``precision_pa``)
+    ``tp_pa / (tp_pa + fp_pa)``, i.e. |observed ∩ expected| / |observed|. NaN
+    when no taxa are observed.
+Taxon Detection Rate (TDR, also reported as ``recall_pa``)
+    ``tp_pa / (tp_pa + fn_pa)``, i.e. |observed ∩ expected| / |expected|. NaN
+    when no taxa are expected.
     Observed taxa are those above ``min_relative_abundance`` of the sample's
     reads; expected taxa are those with expected abundance > 0. By default only
     lineages resolved at the rank are counted on either side. With
     ``legacy_unresolved_taxa=True`` unresolved lineages count as taxa too
     (truncated lineages and ``Unassigned``), as in the original tax-credit.
+    The underlying counts are reported too: ``tp_pa`` (shared taxa), ``fp_pa``
+    (observed but not expected), ``fn_pa`` (expected but not observed), and
+    the totals ``tot_val_obs`` (= tp_pa + fp_pa) and ``tot_val_exp``
+    (= tp_pa + fn_pa). These are presence/absence counts of taxa in the
+    community, not of ASVs.
 Bray-Curtis
     Dissimilarity between expected and observed relative abundance at the
     rank. Unresolved lineages keep their truncated label (``Unassigned`` for
@@ -60,12 +67,26 @@ Bray-Curtis
     known to genus. No abundance threshold is applied.
 Precision, Recall, F-measure (needs ``asv_taxonomy``)
     Each ASV's observed lineage is scored against its known lineage with
-    ``framework_functions.evaluate_classification``, weighted by the ASV's
-    reads in the sample: match = true positive, underclassification = false
-    negative, over- and misclassification = false positive and false negative.
-    ``ASV Precision`` / ``ASV Recall`` / ``ASV F-measure`` weight every ASV
-    equally. ``*_ratio`` columns give the read-weighted fraction of each
-    classification outcome. ASVs without a known lineage are left out.
+    ``framework_functions.evaluate_classification``, and the tallies are turned
+    into scores by ``metrics.metrics_from_outcomes``, which defines them:
+    match = true positive, underclassification = false negative, and
+    over- and misclassification = false positive, with misclassification also a
+    false negative. Overclassification is *not* a false negative -- assigning
+    deeper than the reference knows does not count against recall -- but it is
+    still a false positive, so precision penalises it.
+
+    ``Recall_original`` and ``F-measure_original`` report the original
+    tax-credit scoring, in which overclassification was a false negative too.
+    Precision is unchanged by this, so there is no ``Precision_original``.
+
+    These columns are weighted by the ASV's reads in the sample, and the
+    tallies ``TP`` / ``FP`` / ``FN`` / ``FN_original`` are read sums that
+    reconcile with them. ``ASV Precision`` / ``ASV Recall`` /
+    ``ASV F-measure`` / ``ASV Recall_original`` /
+    ``ASV F-measure_original`` weight every ASV equally, and the tallies
+    ``n_match`` / ``n_under`` / ``n_over`` / ``n_mis`` are ASV counts that
+    reconcile with those. ``*_ratio`` columns give the read-weighted fraction
+    of each classification outcome. ASVs without a known lineage are left out.
 """
 
 import re
@@ -73,10 +94,8 @@ import re
 import numpy as np
 import pandas as pd
 
-from tax_credit.framework_functions import (
-    evaluate_classification,
-    precision_recall_fscore,
-)
+from tax_credit.framework_functions import score_classifications
+from tax_credit.metrics import CLASSIFICATION_OUTCOMES  # noqa: F401
 from tax_credit.taxa_manipulator import normalize_taxon
 
 UNASSIGNED_LABELS = frozenset({"", "Unassigned", "Unclassified", "No blast hit"})
@@ -84,33 +103,62 @@ UNASSIGNED = "Unassigned"
 DEFAULT_RANKS = ("kingdom", "phylum", "class", "order", "family", "genus",
                  "species")
 
-CLASSIFICATION_OUTCOMES = (
-    "match",
-    "underclassification",
-    "overclassification",
-    "misclassification",
-)
-
-METRIC_COLUMNS = [
+# Composition metrics: presence/absence of taxa, not per-ASV scoring.
+COMPOSITION_METRIC_COLUMNS = [
     "Taxon Accuracy Rate",
     "Taxon Detection Rate",
     "Bray-Curtis",
+]
+
+# Per-ASV scoring weighted by each ASV's reads in the sample. The tallies are
+# read sums, so TP / (TP + FP) reproduces Precision.
+READ_WEIGHTED_SCORE_COLUMNS = [
     "Precision",
     "Recall",
     "F-measure",
+    "Recall_original",
+    "F-measure_original",
+    "TP",
+    "FP",
+    "FN",
+    "FN_original",
+]
+
+# The same scoring with every ASV weighted equally. The tallies are ASV
+# counts, so n_match / (n_match + n_over + n_mis) reproduces ASV Precision.
+ASV_SCORE_COLUMNS = [
     "ASV Precision",
     "ASV Recall",
     "ASV F-measure",
+    "ASV Recall_original",
+    "ASV F-measure_original",
+    "n_match",
+    "n_under",
+    "n_over",
+    "n_mis",
+]
+
+# Read-weighted fraction of each classification outcome.
+CLASSIFICATION_RATIO_COLUMNS = [
     "match_ratio",
     "underclassification_ratio",
     "overclassification_ratio",
     "misclassification_ratio",
 ]
 
+# Everything classification_scores fills in.
+CLASSIFICATION_SCORE_COLUMNS = (READ_WEIGHTED_SCORE_COLUMNS
+                                + ASV_SCORE_COLUMNS
+                                + CLASSIFICATION_RATIO_COLUMNS)
+
+METRIC_COLUMNS = COMPOSITION_METRIC_COLUMNS + CLASSIFICATION_SCORE_COLUMNS
+
 COUNT_COLUMNS = [
-    "n_expected_taxa",
-    "n_observed_taxa",
-    "n_shared_taxa",
+    "tp_pa",
+    "fp_pa",
+    "fn_pa",
+    "tot_val_exp",
+    "tot_val_obs",
     "n_asvs_scored",
     "reads_scored_fraction",
 ]
@@ -415,16 +463,26 @@ def bray_curtis(observed, expected):
 
 
 def classification_scores(sample_counts, assignments, asv_taxonomy, level):
-    """Precision / recall / F-measure and classification ratios for one sample.
+    """Per-ASV scores and classification ratios for one sample at one rank.
 
-    Returns a dict with the ``Precision``-to-``misclassification_ratio``
-    columns of ``METRIC_COLUMNS`` plus ``n_asvs_scored`` and
-    ``reads_scored_fraction``.
+    Returns a dict with every ``CLASSIFICATION_SCORE_COLUMNS`` entry plus
+    ``n_asvs_scored`` and ``reads_scored_fraction``, all NaN when no ASV in the
+    sample has a known lineage.
+
+    Each ASV is scored twice, by ``framework_functions.score_classifications``:
+    once weighted by its reads in the sample, giving ``Precision`` / ``Recall``
+    / ``F-measure`` and the read tallies ``TP`` / ``FP`` / ``FN`` /
+    ``FN_original``; and once with every ASV weighted equally, giving the
+    ``ASV *`` scores and the ASV tallies ``n_match`` / ``n_under`` / ``n_over``
+    / ``n_mis``. Each set of tallies reconciles with the scores beside it.
+    ``Recall_original`` and ``F-measure_original`` carry the original
+    tax-credit scoring, in which overclassification also counts as a false
+    negative.
     """
     present = sample_counts[sample_counts > 0]
     known = asv_taxonomy.reindex(present.index).fillna("")
     known = known[known != ""]
-    scores = {col: np.nan for col in METRIC_COLUMNS[3:]}
+    scores = {col: np.nan for col in CLASSIFICATION_SCORE_COLUMNS}
     scores["n_asvs_scored"] = len(known)
     total = present.sum()
     scores["reads_scored_fraction"] = (
@@ -438,17 +496,18 @@ def classification_scores(sample_counts, assignments, asv_taxonomy, level):
         obs.append(truncate_lineage(assignments.get(feature_id, ""), level)[0])
     weights = [float(present[f]) for f in known.index]
 
-    scores["Precision"], scores["Recall"], scores["F-measure"] = (
-        precision_recall_fscore(exp, obs, sample_weight=weights))
-    (scores["ASV Precision"], scores["ASV Recall"],
-     scores["ASV F-measure"]) = precision_recall_fscore(exp, obs)
+    # read-weighted: the headline scores, the read tallies, and the ratios
+    weighted = score_classifications(exp, obs, sample_weight=weights)
+    for column in READ_WEIGHTED_SCORE_COLUMNS + CLASSIFICATION_RATIO_COLUMNS:
+        scores[column] = weighted[column]
 
-    outcomes = dict.fromkeys(CLASSIFICATION_OUTCOMES, 0.0)
-    for e, o, w in zip(exp, obs, weights):
-        outcomes[evaluate_classification(o, e)] += w
-    weight_sum = sum(weights)
-    for outcome, weight in outcomes.items():
-        scores[f"{outcome}_ratio"] = weight / weight_sum
+    # every ASV weighted equally
+    per_asv = score_classifications(exp, obs)
+    for column in ("Precision", "Recall", "F-measure", "Recall_original",
+                   "F-measure_original"):
+        scores[f"ASV {column}"] = per_asv[column]
+    for column in ("n_match", "n_under", "n_over", "n_mis"):
+        scores[column] = per_asv[column]
     return scores
 
 
@@ -496,9 +555,11 @@ def evaluate_mock_samples(counts, assignments, ranks, eval_ranks, samples,
                 "Taxon Accuracy Rate": tar,
                 "Taxon Detection Rate": tdr,
                 "Bray-Curtis": bray_curtis(observed, expected),
-                "n_expected_taxa": n_exp,
-                "n_observed_taxa": n_obs,
-                "n_shared_taxa": n_shared,
+                "tp_pa": n_shared,
+                "fp_pa": n_obs - n_shared,
+                "fn_pa": n_exp - n_shared,
+                "tot_val_exp": n_exp,
+                "tot_val_obs": n_obs,
             }
             if asv_taxonomy is not None:
                 row.update(classification_scores(

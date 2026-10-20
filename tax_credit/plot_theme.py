@@ -61,7 +61,36 @@ _METRIC_LABELS = {
     "overclassification_ratio": "Overclassification ratio",
     "misclassification_ratio": "Misclassification ratio",
     "Bray-Curtis": "Bray-Curtis dissimilarity",
+    "Taxon Accuracy Rate": "Taxon accuracy rate (precision_pa)",
+    "Taxon Detection Rate": "Taxon detection rate (recall_pa)",
+    "Recall_original": "Recall (original scoring)",
+    "F-measure_original": "F-measure (original scoring)",
+    "ASV Recall_original": "ASV recall (original scoring)",
+    "ASV F-measure_original": "ASV F-measure (original scoring)",
 }
+
+# Alternative spellings accepted in config files. The mock-community taxon
+# rates are a precision and a recall over presence/absence of taxa, so both
+# names refer to the same column.
+METRIC_ALIASES = {
+    "precision_pa": "Taxon Accuracy Rate",
+    "recall_pa": "Taxon Detection Rate",
+    "TAR": "Taxon Accuracy Rate",
+    "TDR": "Taxon Detection Rate",
+}
+
+# Reported for audit, never plotted or used to rank runs: the original scoring
+# and the raw tallies behind the scores.
+NON_PLOT_METRICS = frozenset({
+    "Recall_original",
+    "F-measure_original",
+    "ASV Recall_original",
+    "ASV F-measure_original",
+    "TP", "FP", "FN", "FN_original",
+    "n_scored", "n_match", "n_under", "n_over", "n_mis",
+    "tp_pa", "fp_pa", "fn_pa", "tot_val_exp", "tot_val_obs",
+    "n_asvs_scored", "reads_scored_fraction",
+})
 
 _EVAL_METHOD_LABELS = {
     "cross-validated": "Cross-validated",
@@ -105,9 +134,37 @@ def apply_tax_credit_theme():
     sns.set_theme(context="paper", style="ticks", rc=_THEME_RC)
 
 
+def resolve_metric(metric):
+    """Canonical column name for a metric, resolving config aliases.
+
+    ``precision_pa`` and ``recall_pa`` name the mock-community taxon accuracy
+    and detection rates; every other name is returned unchanged.
+    """
+    return METRIC_ALIASES.get(str(metric).strip(), metric)
+
+
+def plottable_metrics(metrics, available=None):
+    """Metrics to plot: aliases resolved, audit-only columns dropped.
+
+    *metrics* is what the config asked for, in order. *available*, when given,
+    restricts the result to columns that exist. Duplicates introduced by
+    aliasing are collapsed, keeping the first occurrence.
+    """
+    resolved, seen = [], set()
+    for metric in metrics:
+        metric = resolve_metric(metric)
+        if metric in NON_PLOT_METRICS or metric in seen:
+            continue
+        if available is not None and metric not in available:
+            continue
+        seen.add(metric)
+        resolved.append(metric)
+    return resolved
+
+
 def metric_label(metric):
     """Readable metric name, e.g. ``misclassification_ratio`` -> ``Misclassification ratio``."""
-    return _METRIC_LABELS.get(metric, metric)
+    return _METRIC_LABELS.get(resolve_metric(metric), metric)
 
 
 def ratio_label(ratio_col):

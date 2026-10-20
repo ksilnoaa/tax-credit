@@ -56,9 +56,13 @@ Text-based assignment evaluation for **novel-taxa**, **cross-validated**, **cros
 | `summary_fp` | `str` | Where to write the summary CSV (pandas default comma separator). |
 | `test_type` | `str` | `'novel-taxa'`, `'cross-validated'`, `'cross-validated-trad'`, or `'self-validated'`. Selects how `dataset_id` is parsed (`parse_novel_dataset_id`, `parse_cv_dataset_id`, or `parse_self_validated_dataset_id`). Other values raise `ValueError`. |
 
-**Per directory:** writes `classification_accuracy_log.tsv` under that results dir (`CLASSIFICATION_ACCURACY_LOG_TSV`), appends one summary row, returns the full `DataFrame`.
+**Per directory:** writes two files under that results dir — the per-read `classification_accuracy_log.tsv` (`CLASSIFICATION_ACCURACY_LOG_TSV`) and the per-rank `classification_metrics.tsv` (`CLASSIFICATION_METRICS_TSV`) — appends one summary row, and returns the full `DataFrame`.
 
-**Output columns:** `Dataset`, `level`, `iteration`, `Method`, `Parameters`, `match_ratio`, `overclassification_ratio`, `underclassification_ratio`, `misclassification_ratio`, `mismatch_level_list`, `Precision`, `Recall`, `F-measure`.
+**Output columns:** `Dataset`, `level`, `iteration`, `Method`, `Parameters`, `match_ratio`, `overclassification_ratio`, `underclassification_ratio`, `misclassification_ratio`, `mismatch_level_list`, `Precision`, `Recall`, `F-measure`, `Recall_original`, `F-measure_original`, `TP`, `FP`, `FN`, `FN_original`.
+
+For the cross-validated and self-validated types every score column holds a length-7 list indexed by taxonomic level; index 0 (kingdom) is never scored and is `NaN`. The four ratio columns describe the full-depth comparison only. For novel-taxa every score is a single full-depth value.
+
+`Recall_original` and `F-measure_original` report the original tax-credit scoring, in which overclassification also counted as a false negative. See `metrics.metrics_from_outcomes` for the definitions. **`match_ratio` no longer equals `Recall`** — it equals `Recall_original`; the new `Recall` is higher by exactly the overclassification rate.
 
 **Loading saved summaries:** `pd.read_csv(summary_fp, index_col=0)`.
 
@@ -71,19 +75,76 @@ Expands summary rows into **per-level** rows for plotting (levels `1..6` in the 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | `df` | `DataFrame` | (required) | Typically the return value of `novel_taxa_classification_evaluation`. |
-| `columns` | `list` | `['Precision','Recall','F-measure','mismatch_level_list']` | Which columns to expand; `mismatch_level_list` is converted from string form if needed. |
+| `columns` | `iterable` | `PER_LEVEL_METRIC_COLUMNS` (`Precision`, `Recall`, `F-measure`, `Recall_original`, `F-measure_original`, `TP`, `FP`, `FN`, `FN_original`) | Which columns to expand. Columns absent from `df` are skipped, so summaries written before a metric existed still load. Values stored as stringified lists (as read back from CSV) are parsed. |
 
-**Returns:** `DataFrame` with columns `Dataset`, `level`, `iteration`, `Method`, `Parameters`, plus derived metric columns. When `mismatch_level_list` is listed, `match_ratio` is added and equals `Recall` at that level.
+**Returns:** `DataFrame` with columns `Dataset`, `level`, `iteration`, `Method`, `Parameters`, plus one column per expanded metric.
+
+This function no longer derives `match_ratio`. It used to take it from `Recall`, which was valid only while every non-match counted as a false negative; use `extract_per_level_classification_ratios_by_fold` for ratios.
 
 ### `extract_per_level_classification_ratios_by_fold(results_dirs)` / `extract_per_level_classification_ratios(results_dirs)`
 
-Recompute match / over- / under- / misclassification ratios at levels `1..6` (phylum..species) from each results directory's `classification_accuracy_log.tsv`. The `_by_fold` form returns one row per directory and level with `Dataset`, `novel_level` (novel-taxa simulation level, `<NA>` otherwise), `iteration`, `Method`, `Parameters`, `level` and the four ratios. The other form averages across iterations, grouped by `Dataset`, `novel_level`, `Method`, `Parameters` and `level`.
+Per-rank classification metrics at levels `1..6` (phylum..species), read from each results directory's `classification_metrics.tsv` and recomputed from `classification_accuracy_log.tsv` when that sidecar is absent (results written before it existed). Every rank is scored independently, by re-classifying each read's observed and expected taxonomy truncated to that rank.
+
+The `_by_fold` form returns one row per directory and level with `Dataset`, `novel_level` (novel-taxa simulation level, `<NA>` otherwise), `iteration`, `Method`, `Parameters`, `level` and every column in `CLASSIFICATION_METRIC_COLS` (the four ratios, the four outcome counts, `n_scored`, the five scores and the four tallies). The other form averages across iterations, grouped by `Dataset`, `novel_level`, `Method`, `Parameters` and `level`.
 
 ### `select_best_runs(df, metrics, group_cols=("Dataset",), run_cols=("Method", "Parameters"), tolerance=1e-9)`
 
-For each group and metric, returns the run (method + parameters) with the best mean score across its rows. Metrics in `LOWER_IS_BETTER_METRICS` (mis-, over- and underclassification ratio) are minimised; all others are maximised. Ties within `tolerance` go to the first run sorted by `run_cols`. Output columns: the group columns, `metric`, `direction`, the run columns, `value`, `n_folds`, `n_tied`. Filter `df` to a single level first.
+For each group and metric, returns the run (method + parameters) with the best mean score across its rows. Metrics in `LOWER_IS_BETTER_METRICS` (mis-, over- and underclassification ratio) are minimised; all others are maximised. Metric names are resolved through `plot_theme.METRIC_ALIASES`, and audit-only columns (`plot_theme.NON_PLOT_METRICS` — the `*_original` scores and the raw tallies) raise `ValueError`, because they are not comparable across runs with different numbers of sequences or reads. Ties within `tolerance` go to the first run sorted by `run_cols`. Output columns: the group columns, `metric`, `direction`, the run columns, `value`, `n_folds`, `n_tied`. Filter `df` to a single level first.
 
 ---
+
+## `tax_credit.metrics`
+
+The definitions of every per-sequence classification metric. Imports nothing
+else from the package, so both `framework_functions` and `novel_evaluation` use
+it.
+
+### `metrics_from_outcomes(match, underclassification, overclassification, misclassification)`
+
+Takes four tallies and returns every metric derived from them, as a dict keyed
+by `CLASSIFICATION_METRIC_COLUMNS`. The tallies may be sequence counts or
+weights (e.g. read counts); the formulas are identical either way.
+
+```
+TP          = match
+FP          = overclassification + misclassification
+FN          = underclassification + misclassification
+FN_original = underclassification + overclassification + misclassification
+
+Precision          = TP / (TP + FP)
+Recall             = TP / (TP + FN)
+Recall_original    = TP / (TP + FN_original)
+F-measure          = 2PR / (P + R)          using Recall
+F-measure_original = 2PR / (P + R)          using Recall_original
+match_ratio, underclassification_ratio, overclassification_ratio,
+misclassification_ratio = each tally / n_scored
+```
+
+`FN` forgives overclassification: assigning deeper than the reference knows
+does not count against sensitivity. Overclassification is still a false
+positive, so `Precision` penalises it and `F-measure` therefore does too, half
+as heavily as before. `FN_original` is the microaveraged count the original
+tax-credit used.
+
+Two consequences:
+
+- `TP + FN` is **not** the number of records scored, so `Recall` is not a
+  microaveraged recall. `Recall_original` is.
+- `Recall` **no longer equals `match_ratio`**. `Recall_original` does; the two
+  differ by exactly the overclassification rate.
+
+A score is `NaN` when its denominator holds no observations at all, and `0.0`
+when there were observations but no true positives, so "nothing was scored"
+stays distinguishable from "everything was wrong". `F-measure` is `0.0` when
+precision and recall are both a real zero.
+
+| situation | `Precision` | `Recall` | `F-measure` |
+|---|---|---|---|
+| nothing scored (`n_scored == 0`) | NaN | NaN | NaN |
+| kingdom rank (never scored) | NaN | NaN | NaN |
+| `TP == 0`, some FP and FN | 0 | 0 | 0 |
+| all underclassification (`FP == 0`) | NaN | 0 | NaN |
+| all overclassification (`FN == 0`) | 0 | NaN | NaN |
 
 ## `tax_credit.framework_functions` (selected)
 
@@ -92,8 +153,9 @@ Large module: simulation generation, parameter sweeps, PRF utilities, QIIME help
 | Function | Signature highlights | Role |
 |----------|---------------------|------|
 | `load_prf(obs_fp, exp_fp, level=slice(0,7), sort=True)` | Paths or list-like inputs accepted via `load_taxa`. | Align expected/observed taxon lists. |
-| `compute_prf(exp, obs, test_type='cross-validated', l_range=range(1,7), sample_weight=None, exclude=None)` | `test_type` in `mock`, `novel-taxa`, `cross-validated`, `cross-validated-trad`. | Micro-averaged P/R/F; CV modes fill length-7 vectors by level. |
-| `precision_recall_fscore(exp, obs, sample_weight=None, exclude=None)` | Internal to `compute_prf`. | Match / underclassification / misclassification logic. |
+| `compute_prf(exp, obs, test_type='cross-validated', l_range=range(1,7), sample_weight=None, exclude=None)` | `test_type` in `mock`, `novel-taxa`, `cross-validated`, `cross-validated-trad`, `self-validated`. | Returns a dict keyed by `CLASSIFICATION_METRIC_COLUMNS`; CV modes fill length-7 lists by level, with unscored levels `NaN`. |
+| `score_classifications(exp, obs, sample_weight=None, exclude=None)` | Used by `compute_prf` and `mock_community`. | Tallies the four outcomes and returns the full metric dict. |
+| `precision_recall_fscore(exp, obs, sample_weight=None, exclude=None)` | Thin wrapper on `score_classifications`. | The three headline scores only. *Recall* is the new definition. |
 | `evaluate_classification(obs_taxon, exp_taxon)` | String taxonomies. | `'match'`, `'underclassification'`, `'overclassification'`, `'misclassification'`. |
 | `find_last_common_ancestor(obs, exp)` | Taxonomy strings. | Index of shallowest mismatch (used for mismatch histograms). |
 
