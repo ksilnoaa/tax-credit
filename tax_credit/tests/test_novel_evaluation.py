@@ -48,6 +48,38 @@ class NovelEvaluationModuleTests(unittest.TestCase):
             _truncate_taxonomy_at_level("A;B;C;D;E;F;NA", 6), "A;B;C;D;E;F"
         )
 
+    def test_load_prf_projects_extra_ranks(self):
+        # PR2-style nine ranks, scored on seven by dropping ranks 1 and 3
+        positions = [0, 2, 4, 5, 6, 7, 8]
+        with TemporaryDirectory() as tmp:
+            exp_fp, obs_fp = join(tmp, "exp.tsv"), join(tmp, "obs.tsv")
+            with open(exp_fp, "w") as f:
+                f.write("s1\tD;SG;Div;Sub;C;O;F;G;S\n")
+                # expected truncated to family by the fold's reference
+                f.write("s2\tD;SG;Div;Sub;C;O;F\n")
+            with open(obs_fp, "w") as f:
+                f.write("Feature ID\tTaxon\tConfidence\n")
+                f.write("s1\tD;SG;Div;Sub\t0.9\n")
+                f.write("s2\tUnassigned\t0\n")
+            exp, obs = framework_functions.load_prf(
+                obs_fp, exp_fp, rank_positions=positions)
+            self.assertEqual(exp, ["D;Div;C;O;F;G;S", "D;Div;C;O;F"])
+            self.assertEqual(obs, ["D;Div", "Unassigned"])
+            # without positions the old behaviour holds: the first seven ranks
+            exp, _ = framework_functions.load_prf(obs_fp, exp_fp)
+            self.assertEqual(exp[0], "D;SG;Div;Sub;C;O;F")
+
+    def test_load_prf_rejects_taxonomy_deeper_than_declared(self):
+        with TemporaryDirectory() as tmp:
+            exp_fp, obs_fp = join(tmp, "exp.tsv"), join(tmp, "obs.tsv")
+            with open(exp_fp, "w") as f:
+                f.write("s1\tA;B;C;D;E;F;G;H;I\n")
+            with open(obs_fp, "w") as f:
+                f.write("s1\tA;B\n")
+            with self.assertRaises(ValueError):
+                framework_functions.load_prf(
+                    obs_fp, exp_fp, rank_positions=[0, 1, 2, 3, 4, 5, 6])
+
     def test_per_level_ratios_with_internal_na(self):
         # Wrong genus under an NA order: the error belongs at level 5 (genus).
         # Dropping the NA rank would shift it up to level 4 (family).

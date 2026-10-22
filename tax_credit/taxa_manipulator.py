@@ -152,6 +152,23 @@ def normalize_taxon(taxon, delim=';'):
     return delim.join(ranks)
 
 
+# keep only selected rank positions, e.g. to score a 9-rank PR2 string as 7
+def project_taxon(taxon, positions, delim=';'):
+    '''Keep the ranks at *positions* (0-based, strictly increasing), in order.
+
+    Lets a database whose taxonomy has extra ranks be scored on the standard
+    seven: PR2's Domain;Supergroup;Division;Subdivision;Class;Order;Family;
+    Genus;Species with positions [0, 2, 4, 5, 6, 7, 8] drops Supergroup and
+    Subdivision. A string shorter than the deepest position (a classifier that
+    stopped early, or a truncated expected taxonomy) keeps the positions it
+    has, so a prefix of the full string projects to a prefix of the result.
+
+    str, list -> str
+    '''
+    ranks = taxon.split(delim)
+    return delim.join(ranks[p] for p in positions if p < len(ranks))
+
+
 # every lineage prefix a reference taxonomy contains
 def reference_lineage_prefixes(infile, delim=';', field=1, f_delim='\t'):
     '''Set of every lineage prefix in a taxonomy file OR list.

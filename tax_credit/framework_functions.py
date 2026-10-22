@@ -51,7 +51,8 @@ from tax_credit.taxa_manipulator import (accept_list_or_file,
                                          is_unassigned_taxon,
                                          trim_taxonomy_strings,
                                          truncate_taxa_to_reference,
-                                         extract_taxa_names)
+                                         extract_taxa_names,
+                                         project_taxon)
 from qiime2 import Artifact
 from qiime2.plugins import feature_classifier
 from q2_types.feature_data import DNAIterator
@@ -1634,9 +1635,31 @@ def compute_prf(exp, obs, test_type='cross-validated',
             '"cross-validated-trad", "self-validated", or "mock".')
 
 
-def load_prf(obs_fp, exp_fp, level=slice(0, 7), sort=True):
-    exp_taxa = load_taxa(exp_fp, level=level, sort=sort)
-    obs_taxa = load_taxa(obs_fp, level=level, sort=sort)
+def load_prf(obs_fp, exp_fp, level=slice(0, 7), sort=True,
+             rank_positions=None):
+    '''Load expected and observed taxonomies, aligned by sequence ID.
+
+    rank_positions: list of int, optional
+        Rank positions to keep from each taxonomy string, in place of *level*,
+        for a database whose taxonomy is not the standard seven ranks (see
+        ``taxa_manipulator.project_taxon``). Must select seven positions.
+    '''
+    if rank_positions is None:
+        exp_taxa = load_taxa(exp_fp, level=level, sort=sort)
+        obs_taxa = load_taxa(obs_fp, level=level, sort=sort)
+    else:
+        exp_taxa = load_taxa(exp_fp, level=slice(None), sort=sort)
+        obs_taxa = load_taxa(obs_fp, level=slice(None), sort=sort)
+        # more ranks than declared means the positions point at the wrong ranks
+        n_declared = max(rank_positions) + 1
+        deepest = max((len(t.split(';')) for t in exp_taxa), default=0)
+        if deepest > n_declared:
+            raise ValueError(
+                '{0} holds taxonomies with {1} ranks, but rank_positions '
+                'only reaches rank {2}; check the taxa_ranks declared for '
+                'this database.'.format(exp_fp, deepest, n_declared))
+        exp_taxa = [project_taxon(t, rank_positions) for t in exp_taxa]
+        obs_taxa = [project_taxon(t, rank_positions) for t in obs_taxa]
 
     # raise error if obs_taxa and exp_taxa are not same length
     if len(obs_taxa) != len(exp_taxa):

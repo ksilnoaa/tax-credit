@@ -95,7 +95,8 @@ def write_classification_metrics(per_level, meta, metrics_fp):
 
 
 def novel_taxa_classification_evaluation(results_dirs, expected_results_dir,
-                                         summary_fp, test_type='novel-taxa'):
+                                         summary_fp, test_type='novel-taxa',
+                                         rank_positions=None):
     '''Input glob of novel taxa results, receive a summary of accuracy results.
     results_dirs = list or glob of novel taxa observed results in format:
                     precomputed_results_dir/dataset_id/method_id/params_id/
@@ -108,6 +109,10 @@ def novel_taxa_classification_evaluation(results_dirs, expected_results_dir,
     summary_fp = filepath to contain summary of results
     test_type = one of 'novel-taxa', 'cross-validated',
         'cross-validated-trad', or 'self-validated'
+    rank_positions = optional dict of database name to the seven rank
+        positions to score, for databases whose taxonomy is not the standard
+        seven ranks (see ``framework_functions.load_prf``). Databases not
+        listed keep the first seven ranks.
 
     Returns results as df, in addition to printing summary_fp.
 
@@ -153,7 +158,9 @@ def novel_taxa_classification_evaluation(results_dirs, expected_results_dir,
 
         obs_fp = join(results_dir, QUERY_TAX_ASSIGNMENTS_TXT)
         exp_fp = join(expected_results_dir, dataset_id, QUERY_TAXA_TSV)
-        exp_taxa, obs_taxa = load_prf(obs_fp, exp_fp)
+        exp_taxa, obs_taxa = load_prf(
+            obs_fp, exp_fp,
+            rank_positions=(rank_positions or {}).get(index))
 
         # per-rank metrics for every test type, for the sidecar and the plots
         per_level = compute_prf(exp_taxa, obs_taxa,
