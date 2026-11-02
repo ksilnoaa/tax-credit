@@ -38,6 +38,19 @@ The legacy alias **`cross-validated`** means **`cross-validated-taxa`**.
 
 **Queries with no exact match in the reference.** Reference sequences that share the query taxonomy are removed; correct behavior is often assignment to the **last common ancestor** (LCA). Metrics emphasize match vs. overclassification vs. underclassification vs. misclassification, summarized in classification logs and aggregate tables.
 
+## Scoring
+
+Every assignment, whether a simulated query or a mock-community ASV, is one of four outcomes: *match*, *underclassification* (correct but shallower than expected), *overclassification* (deeper than the expected taxonomy goes) or *misclassification* (a wrong name at some rank). Precision, recall and F-measure are computed from those tallies in one place, `metrics.metrics_from_outcomes`:
+
+- match is a true positive;
+- underclassification is a false negative;
+- misclassification is both a false positive and a false negative;
+- overclassification is a false positive **only**.
+
+The last point departs from the original tax-credit, which also counted overclassification as a false negative. Assigning deeper than the reference knows now lowers precision, and so F-measure, but not recall. The original scoring is still reported as `Recall_original` and `F-measure_original`, together with the raw tallies (`TP`, `FP`, `FN`, `FN_original`), for comparison and audit; those columns are never plotted or used to rank runs. `match_ratio` equals `Recall_original`; the new `Recall` is `match_ratio / (1 − overclassification_ratio)`.
+
+A score whose denominator is empty is NaN rather than 0, so "nothing to score" (for example precision when every assignment was underclassified) is distinguishable from "everything was wrong". Scores produced before this revision are not comparable with new ones; re-score old results with the current code rather than reading their old summaries.
+
 ## Data flow (high level)
 
 1. **Simulate or acquire** communities and reference data (see `framework_functions.generate_simulated_datasets`).

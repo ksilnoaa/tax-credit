@@ -84,8 +84,9 @@ def metrics_from_outcomes(match=0., underclassification=0.,
 
     Two consequences worth knowing. ``TP + FN`` is no longer the number of
     records scored, so ``Recall`` is not a microaveraged recall --
-    ``Recall_original`` is. And ``Recall`` no longer equals ``match_ratio``;
-    the two differ by exactly the overclassification rate.
+    ``Recall_original`` is. And ``Recall`` no longer equals ``match_ratio``:
+    it is ``match_ratio / (1 - overclassification_ratio)``, so the two agree
+    only when nothing was overclassified.
 
     A score is NaN when its denominator holds no observations at all, and 0.0
     when there were observations but no true positives, so "nothing was scored"

@@ -87,8 +87,8 @@ class MetricIdentityTests(TestCase):
         self.assertAlmostEqual(self.m['Recall_original'], self.m['match_ratio'])
 
     def test_recall_is_not_the_match_ratio(self):
-        # ... and no longer holds for the new Recall: they differ by exactly
-        # the overclassification rate
+        # ... and no longer holds for the new Recall, which rescales it by the
+        # share of records that were not overclassified
         self.assertNotAlmostEqual(self.m['Recall'], self.m['match_ratio'])
         self.assertAlmostEqual(
             self.m['Recall'],

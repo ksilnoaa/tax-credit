@@ -34,12 +34,14 @@ Mock-community evaluation: observed feature tables and per-ASV assignments versu
 | `select_mock_samples(counts, composition=None, asv_taxonomy=None, ...)` | Pick the samples scoreable against the expected data available. |
 | `collapse_observed(...)`, `collapse_expected(...)` | Collapse abundance to a taxonomic level for comparison. |
 | `taxon_accuracy_detection(observed, observed_resolved, expected, ...)` | Taxon detection rate, false positives, and resolution-aware variants. |
-| `classification_scores(sample_counts, assignments, asv_taxonomy, level)` | Per-ASV precision / recall / F-measure at one level. |
+| `classification_scores(sample_counts, assignments, asv_taxonomy, level)` | Per-ASV scores at one level, twice: read-weighted (`Precision`, `Recall`, `F-measure`, `Recall_original`, `F-measure_original`, tallies `TP` / `FP` / `FN` / `FN_original` as read sums, and the four ratios) and with every ASV weighted equally (`ASV *` scores, tallies `n_match` / `n_under` / `n_over` / `n_mis` as ASV counts). Built on `framework_functions.score_classifications`. |
 | `bray_curtis(observed, expected)` | Composition dissimilarity between observed and expected. |
 | `evaluate_mock_samples(counts, assignments, ranks, eval_ranks, samples, ...)` | Top-level driver returning one row of metrics per sample and level. |
 | `check_backbone(expected_lineages, reference_lineages, ranks, eval_ranks, ...)` | Report expected taxa that the reference database could never recover. |
 
 Tourmaline's `scripts/tax_credit_mock.py` wraps these for config validation, input staging and summary writing.
+
+Output columns are grouped in module constants: `COMPOSITION_METRIC_COLUMNS` (`Taxon Accuracy Rate`, `Taxon Detection Rate`, `Bray-Curtis`), `READ_WEIGHTED_SCORE_COLUMNS`, `ASV_SCORE_COLUMNS` and `CLASSIFICATION_RATIO_COLUMNS` (together `CLASSIFICATION_SCORE_COLUMNS`), with `METRIC_COLUMNS` the union. `COUNT_COLUMNS` holds the presence/absence counts behind the taxon rates — `tp_pa`, `fp_pa`, `fn_pa`, `tot_val_exp`, `tot_val_obs` (these **replace** `n_shared_taxa`, `n_observed_taxa` and `n_expected_taxa`) — plus `n_asvs_scored` and `reads_scored_fraction`. `Taxon Accuracy Rate` is `tp_pa / tot_val_obs` and `Taxon Detection Rate` is `tp_pa / tot_val_exp`, so the two are also known as `precision_pa` and `recall_pa` (see `plot_theme.METRIC_ALIASES`).
 
 ---
 
@@ -47,7 +49,7 @@ Tourmaline's `scripts/tax_credit_mock.py` wraps these for config validation, inp
 
 Text-based assignment evaluation for **novel-taxa**, **cross-validated**, **cross-validated-trad**, and **self-validated** layouts (not BIOM composition tables). Uses `framework_functions.load_prf`, `compute_prf`, `evaluate_classification`, `find_last_common_ancestor`, and `paths.QUERY_*` filenames.
 
-### `novel_taxa_classification_evaluation(results_dirs, expected_results_dir, summary_fp, test_type='novel-taxa')`
+### `novel_taxa_classification_evaluation(results_dirs, expected_results_dir, summary_fp, test_type='novel-taxa', rank_positions=None)`
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
@@ -55,6 +57,7 @@ Text-based assignment evaluation for **novel-taxa**, **cross-validated**, **cros
 | `expected_results_dir` | `str` | Must contain `join(expected_results_dir, dataset_id, query_taxa.tsv)` for each dataset. |
 | `summary_fp` | `str` | Where to write the summary CSV (pandas default comma separator). |
 | `test_type` | `str` | `'novel-taxa'`, `'cross-validated'`, `'cross-validated-trad'`, or `'self-validated'`. Selects how `dataset_id` is parsed (`parse_novel_dataset_id`, `parse_cv_dataset_id`, or `parse_self_validated_dataset_id`). Other values raise `ValueError`. |
+| `rank_positions` | `dict`, optional | Database name → the seven rank positions to score, for a database whose taxonomy is not the standard seven ranks (passed to `load_prf`). Databases not listed keep the first seven ranks. |
 
 **Per directory:** writes two files under that results dir — the per-read `classification_accuracy_log.tsv` (`CLASSIFICATION_ACCURACY_LOG_TSV`) and the per-rank `classification_metrics.tsv` (`CLASSIFICATION_METRICS_TSV`) — appends one summary row, and returns the full `DataFrame`.
 
@@ -62,7 +65,9 @@ Text-based assignment evaluation for **novel-taxa**, **cross-validated**, **cros
 
 For the cross-validated and self-validated types every score column holds a length-7 list indexed by taxonomic level; index 0 (kingdom) is never scored and is `NaN`. The four ratio columns describe the full-depth comparison only. For novel-taxa every score is a single full-depth value.
 
-`Recall_original` and `F-measure_original` report the original tax-credit scoring, in which overclassification also counted as a false negative. See `metrics.metrics_from_outcomes` for the definitions. **`match_ratio` no longer equals `Recall`** — it equals `Recall_original`; the new `Recall` is higher by exactly the overclassification rate.
+`Recall_original` and `F-measure_original` report the original tax-credit scoring, in which overclassification also counted as a false negative. See `metrics.metrics_from_outcomes` for the definitions. **`match_ratio` no longer equals `Recall`** — it equals `Recall_original`; the new `Recall` is `match_ratio / (1 − overclassification_ratio)`.
+
+`classification_accuracy_log.tsv` has one line per query (`dataset`, `level`, `iteration`, `method`, `parameters`, `observed_taxonomy`, `expected_taxonomy`, `result`, `mismatch_level`) followed by the fold's `Precision`, `Recall`, `F-measure`, `Recall_original` and `F-measure_original`. `classification_metrics.tsv` has one row per rank 1–6 (`level`, `rank`) with the identifying columns (`Dataset`, `novel_level`, `iteration`, `Method`, `Parameters`) and every `CLASSIFICATION_METRIC_COLUMNS` entry; it is written for every `test_type`, so novel-taxa results get per-rank scores too.
 
 **Loading saved summaries:** `pd.read_csv(summary_fp, index_col=0)`.
 
@@ -130,8 +135,16 @@ Two consequences:
 
 - `TP + FN` is **not** the number of records scored, so `Recall` is not a
   microaveraged recall. `Recall_original` is.
-- `Recall` **no longer equals `match_ratio`**. `Recall_original` does; the two
-  differ by exactly the overclassification rate.
+- `Recall` **no longer equals `match_ratio`**. `Recall_original` does; `Recall`
+  is `match_ratio / (1 − overclassification_ratio)`, so the two agree only when
+  nothing was overclassified.
+
+Column groups, in output order: `OUTCOME_COUNT_COLUMNS` (`n_scored`, `n_match`,
+`n_under`, `n_over`, `n_mis`), `SCORE_COUNT_COLUMNS` (`TP`, `FP`, `FN`,
+`FN_original`), `SCORE_COLUMNS` (`Precision`, `Recall`, `Recall_original`,
+`F-measure`, `F-measure_original`) and `RATIO_COLUMNS`; together
+`CLASSIFICATION_METRIC_COLUMNS`. `ORIGINAL_SCORE_COLUMNS` names the two
+audit-only scores. All of these are re-exported from `framework_functions`.
 
 A score is `NaN` when its denominator holds no observations at all, and `0.0`
 when there were observations but no true positives, so "nothing was scored"
@@ -152,7 +165,7 @@ Large module: simulation generation, parameter sweeps, PRF utilities, QIIME help
 
 | Function | Signature highlights | Role |
 |----------|---------------------|------|
-| `load_prf(obs_fp, exp_fp, level=slice(0,7), sort=True)` | Paths or list-like inputs accepted via `load_taxa`. | Align expected/observed taxon lists. |
+| `load_prf(obs_fp, exp_fp, level=slice(0,7), sort=True, rank_positions=None)` | Paths or list-like inputs accepted via `load_taxa`. `rank_positions` (seven 0-based positions) replaces `level` for a database with extra ranks, via `taxa_manipulator.project_taxon`; raises `ValueError` if an expected taxonomy is deeper than the positions declare. | Align expected/observed taxon lists. |
 | `compute_prf(exp, obs, test_type='cross-validated', l_range=range(1,7), sample_weight=None, exclude=None)` | `test_type` in `mock`, `novel-taxa`, `cross-validated`, `cross-validated-trad`, `self-validated`. | Returns a dict keyed by `CLASSIFICATION_METRIC_COLUMNS`; CV modes fill length-7 lists by level, with unscored levels `NaN`. |
 | `score_classifications(exp, obs, sample_weight=None, exclude=None)` | Used by `compute_prf` and `mock_community`. | Tallies the four outcomes and returns the full metric dict. |
 | `precision_recall_fscore(exp, obs, sample_weight=None, exclude=None)` | Thin wrapper on `score_classifications`. | The three headline scores only. *Recall* is the new definition. |
@@ -243,6 +256,8 @@ See [directory-layout.md](directory-layout.md).
 ## `tax_credit.plot_theme`
 
 Shared plot style. `apply_tax_credit_theme()` sets fonts (Arial, falling back to DejaVu Sans), editable TrueType PDF text, `constrained_layout`, and trimmed axes; every plotting function below calls it. Also provides `METHOD_COLORS` / `method_palette(methods, override=None)` (a fixed Okabe-Ito colour per classify method), `CLASSIFICATION_RATIO_COLORS` and `RATIO_STACK_ORDER`, `metric_cmap(metric)` (`mako_r` for scores, `rocket_r` for error ratios), `metric_limits(values)` (0-1 unless every value is within 0.25 of 0 or 1, then zoomed; returns `(low, high, zoomed)`), and `metric_label` / `eval_method_label` / `ratio_label` for readable names.
+
+Metric names: `METRIC_ALIASES` maps config spellings to columns (`precision_pa` / `TAR` → `Taxon Accuracy Rate`, `recall_pa` / `TDR` → `Taxon Detection Rate`), resolved by `resolve_metric(metric)`. `NON_PLOT_METRICS` lists the audit-only columns — the `*_original` scores and every raw count (`TP`, `FP`, `FN`, `FN_original`, `n_*`, `tp_pa`, `fp_pa`, `fn_pa`, `tot_val_*`, `reads_scored_fraction`). `plottable_metrics(metrics, available=None)` resolves aliases, drops audit-only columns and duplicates, and (given `available`) keeps only columns that exist; Tourmaline filters `plot_metrics` through it.
 
 ## `tax_credit.plotting_functions`
 
