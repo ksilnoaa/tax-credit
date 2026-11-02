@@ -103,9 +103,11 @@ class EvalFrameworkTests(TestCase):
                    'b\tb\t1\t4.0\t6.0\t11.',
                    'b\tb\t1\t5.0\t7.0\t10.']
 
+        _rows = [n.split('\t') for n in _table1]
         cls.table1 = pd.DataFrame(
-            [(n.split('\t')) for n in _table1],
-            columns=['group', 'dataset', 'level', 'x', 'y', 'c'], dtype=float)
+            _rows, columns=['group', 'dataset', 'level', 'x', 'y', 'c'])
+        for _col in ('level', 'x', 'y', 'c'):
+            cls.table1[_col] = cls.table1[_col].astype(float)
 
         cls.table2 = """{"id": "None",
                           "format": "Biological Observation Matrix 1.0.0",

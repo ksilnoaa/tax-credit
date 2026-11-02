@@ -23,7 +23,13 @@ from tax_credit.taxa_manipulator import (string_search,
                                          extract_fasta_ids,
                                          filter_sequences,
                                          stratify_taxonomy_subsets,
-                                         accept_list_or_file)
+                                         accept_list_or_file,
+                                         normalize_taxon,
+                                         reference_lineage_prefixes,
+                                         truncate_taxa_to_reference,
+                                         is_unassigned_taxon,
+                                         strip_taxonomy_header,
+                                         drop_unassigned_taxonomies)
 
 
 class EvalFrameworkTests(TestCase):
@@ -103,6 +109,123 @@ class EvalFrameworkTests(TestCase):
             [self.op11], level=6), [self.op11])
         self.assertEqual(trim_taxonomy_strings(
             [self.op11], level=0), ['203525\tk__Bacteria'])
+
+    def test_normalize_taxon(self):
+        na_taxon = ('Eukaryota;Chordata;Actinopteri;NA;Lutjanidae;Lutjanus;'
+                    'Lutjanus griseus')
+        # internal NA ranks keep their position
+        self.assertEqual(normalize_taxon(na_taxon), na_taxon)
+        # trailing NA and empty ranks are removed
+        self.assertEqual(normalize_taxon('A;B;C;NA;E;F;NA'), 'A;B;C;NA;E;F')
+        self.assertEqual(normalize_taxon('A;B;C;D;E;NA;NA'), 'A;B;C;D;E')
+        self.assertEqual(normalize_taxon('A;B;C;D;E;;'), 'A;B;C;D;E')
+        self.assertEqual(normalize_taxon('A;B;C; NA'), 'A;B;C')
+        self.assertEqual(normalize_taxon('NA'), '')
+        self.assertEqual(normalize_taxon(';;'), '')
+        self.assertEqual(normalize_taxon('Unassigned'), 'Unassigned')
+        # names that only start with NA are not ranks to strip
+        self.assertEqual(normalize_taxon('A;B;NAxx'), 'A;B;NAxx')
+
+    def test_reference_lineage_prefixes(self):
+        ref = ['r1\tEukaryota;Chordata;Actinopteri',
+               'r2\tEukaryota;Chordata;Chondrichthyes;NA;Hexanchidae']
+        self.assertEqual(
+            reference_lineage_prefixes(ref),
+            {'Eukaryota',
+             'Eukaryota;Chordata',
+             'Eukaryota;Chordata;Actinopteri',
+             'Eukaryota;Chordata;Chondrichthyes',
+             'Eukaryota;Chordata;Chondrichthyes;NA',
+             'Eukaryota;Chordata;Chondrichthyes;NA;Hexanchidae'})
+
+    def test_truncate_taxa_to_reference(self):
+        ref = ['r1\tA;B;C;D;Nemichthys',
+               'r2\tA;B;C;OtherFamily;OtherGenus']
+        query = [
+            # genus Avocettina is gone with its only species: expect family
+            'q1\tA;B;C;D;Avocettina',
+            # every rank present: unchanged
+            'q2\tA;B;C;D;Nemichthys',
+            # family and genus both absent: expect the order
+            'q3\tA;B;C;GoneFamily;GoneGenus',
+        ]
+        self.assertEqual(
+            truncate_taxa_to_reference(query, ref),
+            ['q1\tA;B;C;D', 'q2\tA;B;C;D;Nemichthys', 'q3\tA;B;C'])
+
+    def test_truncate_taxa_to_reference_drops_unreachable(self):
+        # nothing in common with the reference: the query cannot be evaluated
+        self.assertEqual(
+            truncate_taxa_to_reference(['q1\tBacteria;Firmicutes'],
+                                       ['r1\tEukaryota;Chordata']),
+            [])
+
+    def test_truncate_taxa_to_reference_keeps_internal_na(self):
+        ref = ['r1\tEukaryota;Chordata;Actinopteri;NA;Centropomidae;Lates']
+        query = ['q1\tEukaryota;Chordata;Actinopteri;NA;Centropomidae;Gone']
+        self.assertEqual(
+            truncate_taxa_to_reference(query, ref),
+            ['q1\tEukaryota;Chordata;Actinopteri;NA;Centropomidae'])
+
+    def test_is_unassigned_taxon(self):
+        # no rank assigned anywhere
+        self.assertTrue(is_unassigned_taxon('NA;NA;NA;NA;NA;NA;NA'))
+        self.assertTrue(is_unassigned_taxon('NA; NA ;NA'))
+        self.assertTrue(is_unassigned_taxon('NA'))
+        self.assertTrue(is_unassigned_taxon(';;'))
+        self.assertTrue(is_unassigned_taxon(''))
+        self.assertTrue(is_unassigned_taxon('   '))
+        # placeholders a classifier emits in place of a call
+        self.assertTrue(is_unassigned_taxon('Unassigned'))
+        self.assertTrue(is_unassigned_taxon(' No blast hit '))
+        # non-strings: None, and the NaN pandas reads a bare 'NA' field as
+        self.assertTrue(is_unassigned_taxon(None))
+        self.assertTrue(is_unassigned_taxon(float('nan')))
+        # one assigned rank is enough, however shallow or deep it sits
+        self.assertFalse(is_unassigned_taxon('Eukaryota;NA;NA;NA;NA;NA;NA'))
+        self.assertFalse(is_unassigned_taxon('NA;NA;Actinopteri;NA;NA;NA;NA'))
+        self.assertFalse(is_unassigned_taxon(
+            'Eukaryota;Chordata;Actinopteri;Gadiformes;Gadidae;Gadus;NA'))
+        # names that merely start with NA are real ranks
+        self.assertFalse(is_unassigned_taxon('NAxx;NA;NA'))
+
+    def test_strip_taxonomy_header(self):
+        gadus = ('gadus\tEukaryota;Chordata;Actinopteri;Gadiformes;Gadidae;'
+                 'Gadus;NA')
+        other = 'other\tEukaryota;Chordata;Actinopteri;NA;NA;NA;NA'
+        # QIIME 2's own header, and the other spellings databases ship with
+        for header in ['Feature ID\tTaxon', 'feature-id\tTaxon',
+                       'featureid\tTaxon', 'id\tTaxon', '#OTU ID\tTaxon']:
+            self.assertEqual(strip_taxonomy_header([header, gadus, other]),
+                             [gadus, other])
+        # a headerless database is passed through untouched
+        self.assertEqual(strip_taxonomy_header([gadus, other]), [gadus, other])
+        self.assertEqual(strip_taxonomy_header([]), [])
+        # only the first line is a candidate, so a record that happens to sit
+        # below a header-like string is kept
+        self.assertEqual(strip_taxonomy_header([gadus, 'id\tTaxon']),
+                         [gadus, 'id\tTaxon'])
+        # only the ID column is examined: a real record is never mistaken for
+        # a header because its taxonomy mentions something header-like
+        self.assertEqual(strip_taxonomy_header(['seq1\tid;Taxon']),
+                         ['seq1\tid;Taxon'])
+
+    def test_drop_unassigned_taxonomies(self):
+        gadus = ('gadus\tEukaryota;Chordata;Actinopteri;Gadiformes;Gadidae;'
+                 'Gadus;NA')
+        kingdom_only = 'shallow\tEukaryota;NA;NA;NA;NA;NA;NA'
+        lines = [gadus,
+                 'empty\tNA;NA;NA;NA;NA;NA;NA',
+                 kingdom_only,
+                 'blank\t',
+                 'unassigned\tUnassigned',
+                 'no_tax_field']
+        # only the records that place a sequence somewhere survive
+        self.assertEqual(drop_unassigned_taxonomies(lines),
+                         [gadus, kingdom_only])
+        # unchanged when every record is usable
+        self.assertEqual(drop_unassigned_taxonomies([gadus]), [gadus])
+        self.assertEqual(drop_unassigned_taxonomies([]), [])
 
     def test_branching_taxa(self):
         self.assertEqual(branching_taxa(self.table1, field=6), [])

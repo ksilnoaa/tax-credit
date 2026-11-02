@@ -32,3 +32,19 @@ pip-log.txt
 
 .DS_Store
 
+
+# Benchmark inputs and outputs (generated locally, never committed)
+analyses/
+plots/
+cross-validated-tmp/
+cross-validated-trad-results/
+novel-taxa-results/
+data/cross-validated/
+data/cross-validated-trad/
+data/novel-taxa-simulations/
+data/mock-community/
+data/results/
+
+# Pytest
+.pytest_cache/
+__pycache__/

@@ -136,6 +136,172 @@ def string_search(infile, pattern, discard=False, field=slice(None),
     return keep_list
 
 
+# strip trailing unassigned ranks from a taxonomy string
+def normalize_taxon(taxon, delim=';'):
+    '''Remove trailing 'NA' or empty ranks from a taxonomy string.
+
+    Internal 'NA' ranks are kept so every rank stays at its position:
+    'A;B;C;NA;E;F;NA' -> 'A;B;C;NA;E;F'. A string with no assigned ranks
+    (e.g. 'NA' or ';;') becomes ''.
+
+    str -> str
+    '''
+    ranks = taxon.split(delim)
+    while ranks and ranks[-1].strip() in ('NA', ''):
+        ranks.pop()
+    return delim.join(ranks)
+
+
+# keep only selected rank positions, e.g. to score a 9-rank PR2 string as 7
+def project_taxon(taxon, positions, delim=';'):
+    '''Keep the ranks at *positions* (0-based, strictly increasing), in order.
+
+    Lets a database whose taxonomy has extra ranks be scored on the standard
+    seven: PR2's Domain;Supergroup;Division;Subdivision;Class;Order;Family;
+    Genus;Species with positions [0, 2, 4, 5, 6, 7, 8] drops Supergroup and
+    Subdivision. A string shorter than the deepest position (a classifier that
+    stopped early, or a truncated expected taxonomy) keeps the positions it
+    has, so a prefix of the full string projects to a prefix of the result.
+
+    str, list -> str
+    '''
+    ranks = taxon.split(delim)
+    return delim.join(ranks[p] for p in positions if p < len(ranks))
+
+
+# every lineage prefix a reference taxonomy contains
+def reference_lineage_prefixes(infile, delim=';', field=1, f_delim='\t'):
+    '''Set of every lineage prefix in a taxonomy file OR list.
+
+    'A;B;C' contributes 'A', 'A;B' and 'A;B;C', so membership in the returned
+    set answers "does the reference hold this rank?".
+
+    infile = file or list object of 'id<tab>taxonomy' lines
+    [file ->] list -> set
+    '''
+    prefixes = set()
+    for line in accept_list_or_file(infile):
+        fields = line.split(f_delim)
+        if len(fields) <= field:
+            continue
+        ranks = normalize_taxon(fields[field].strip(), delim=delim).split(delim)
+        for depth in range(1, len(ranks) + 1):
+            prefixes.add(delim.join(ranks[:depth]))
+    return prefixes
+
+
+# trim expected taxonomies back to what a reference can actually return
+def truncate_taxa_to_reference(infile, ref_taxa, delim=';', f_delim='\t'):
+    '''Truncate each taxonomy string to its deepest prefix present in ref_taxa.
+
+    Novel-taxa folds remove the query taxon from the reference, which can take
+    its parent with it — a monotypic genus disappears along with its only
+    species. No classifier can return a rank the reference no longer holds, so
+    grading against it scores every method as an error whatever it does. Cut
+    the expected taxonomy back to the deepest rank that is still represented.
+
+    Lines left with no rank in the reference at all are dropped: nothing about
+    them can be evaluated.
+
+    infile = file or list object of 'id<tab>taxonomy' lines
+    ref_taxa = file or list object of reference 'id<tab>taxonomy' lines
+    [file ->] list -> list
+    '''
+    prefixes = reference_lineage_prefixes(
+        ref_taxa, delim=delim, f_delim=f_delim)
+
+    kept = []
+    for line in accept_list_or_file(infile):
+        fields = line.split(f_delim)
+        if len(fields) < 2:
+            continue
+        ranks = normalize_taxon(fields[1].strip(), delim=delim).split(delim)
+        while ranks and delim.join(ranks) not in prefixes:
+            ranks.pop()
+        if not ranks:
+            continue
+        kept.append(f_delim.join(
+            [fields[0], delim.join(ranks)] + fields[2:]))
+    return kept
+
+
+# placeholder labels classifiers emit in place of a call
+UNASSIGNED_LABELS = ('Unassigned', 'Unclassified', 'No blast hit')
+
+
+# recognise taxonomy strings that place a sequence nowhere
+def is_unassigned_taxon(taxon, delim=';'):
+    '''True if a taxonomy string names no ranks at all.
+
+    Covers empty strings, non-strings (None, or the NaN pandas reads a bare
+    'NA' field as), the placeholder labels in UNASSIGNED_LABELS, and strings
+    whose every rank is 'NA' or blank ('NA;NA;NA;NA;NA;NA;NA', ';;').
+
+    One assigned rank is enough to place a sequence, however shallow or deep:
+    'Eukaryota;NA;NA;NA;NA;NA;NA' and 'NA;NA;Actinopteri;NA;NA;NA;NA' are both
+    usable and are not unassigned.
+
+    str -> bool
+    '''
+    if not isinstance(taxon, str):
+        return True
+    taxon = taxon.strip()
+    if not taxon or taxon in UNASSIGNED_LABELS:
+        return True
+    return not normalize_taxon(taxon, delim=delim)
+
+
+# column names QIIME 2 accepts as the ID column of a taxonomy/metadata file
+HEADER_IDS = ('id', 'sampleid', 'sample id', 'sample-id', 'sample_name',
+              'featureid', 'feature id', 'feature-id', 'otuid', 'otu id')
+
+
+# drop a leading 'Feature ID<tab>Taxon' row, if the file has one
+def strip_taxonomy_header(infile, f_delim='\t'):
+    '''Discard the first line of a taxonomy file when it is a column header.
+
+    Reference databases ship both ways: QIIME 2 writes 'Feature ID<tab>Taxon',
+    while plain RCRUX/anacapa exports start straight in on the records. A
+    header left in place becomes a reference feature literally named
+    'Feature ID' with the taxonomy 'Taxon'.
+
+    Only the first line is examined, and only its ID column, so a real record
+    is never mistaken for a header.
+
+    infile = file or list object
+    [file ->] list -> list
+    '''
+    lines = accept_list_or_file(infile)
+    if not lines:
+        return lines
+    first = lines[0].split(f_delim)[0].strip()
+    if first.startswith('#') or first.lower() in HEADER_IDS:
+        return lines[1:]
+    return lines
+
+
+# drop reference records that carry no usable taxonomy
+def drop_unassigned_taxonomies(infile, field=1, f_delim='\t', delim=';'):
+    '''Discard 'seqID<tab>taxonomy' lines whose taxonomy names no ranks.
+
+    Lines with no taxonomy field at all are discarded too. Companion to
+    string_search, which matches a pattern inside a line and so cannot express
+    'every rank is NA' without also hitting lineages that are merely unresolved
+    at the tip.
+
+    infile = file or list object
+    [file ->] list -> list
+    '''
+    lines = accept_list_or_file(infile)
+    keep_list = []
+    for line in lines:
+        fields = line.split(f_delim)
+        taxon = fields[field] if len(fields) > field else ''
+        if not is_unassigned_taxon(taxon, delim=delim):
+            keep_list.append(line)
+    return keep_list
+
+
 # generate expected taxonomy files for novel taxa
 def trim_taxonomy_strings(infile, level, delim=';'):
     '''Generate expected taxonomy strings for 'novel taxa'
